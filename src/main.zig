@@ -36,13 +36,13 @@ pub fn main() !void {
     defer yapl.deinit();
 
     const source_code =
-        \\print (37 + 42)
+        \\37.3 + 42.042 - 0.4 * 0b1110_1010 + 0x1234_cafe
     ;
 
-    try yapl.load (source_code, "test.yapl");
-    try yapl.call ();
+    try yapl.load(source_code, "test.yapl");
+    try yapl.call();
 
-    try yapl.dump_stack ("end");
+    try yapl.dump_stack("end");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
