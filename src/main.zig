@@ -32,14 +32,41 @@ pub fn main() !void {
         std.debug.print("args: {}\n", .{args});
     }
 
+    if (args.input_filenames.items.len == 0) {
+        std.debug.print("No input filenames given\n", .{});
+        std.process.exit(1);
+    } else if (args.input_filenames.items.len == 0) {
+        std.debug.print("Too many input filenames given\n", .{});
+        std.process.exit(1);
+    }
+
     var yapl = try YAPL.init(allocator);
     defer yapl.deinit();
 
-    const source_code =
-        \\37.3 + 42.042 - 0.4 * 0b1110_1010 + 0x1234_cafe
-    ;
+    const cwd = std.fs.cwd();
+
+    const source_code = cwd.readFileAlloc(
+        allocator,
+        args.input_filenames.items[0],
+        std.math.maxInt(u32),
+    ) catch |err|
+        {
+        switch (err) {
+            error.FileNotFound => {
+                std.debug.print("Cannot open file '{'}'\n", .{
+                    std.zig.fmtEscapes(args.input_filenames.items[0]),
+                });
+                std.process.exit(1);
+            },
+            else => {
+                return err;
+            },
+        }
+    };
+    defer allocator.free(source_code);
 
     try yapl.load(source_code, "test.yapl");
+
     try yapl.call();
 
     try yapl.dump_stack("end");
