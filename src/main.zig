@@ -40,7 +40,10 @@ pub fn main() !void {
         std.process.exit(1);
     }
 
-    var yapl = try YAPL.init(allocator);
+    var yapl = try YAPL.init(allocator, .{
+        .debug_tokens = args.debug_tokens,
+        .debug_ast = args.debug_ast,
+    });
     defer yapl.deinit();
 
     const cwd = std.fs.cwd();
@@ -67,6 +70,8 @@ pub fn main() !void {
 
     try yapl.load(source_code, "test.yapl");
 
+    try yapl.dump_stack("load");
+
     try yapl.call();
 
     try yapl.dump_stack("end");
@@ -87,6 +92,8 @@ const CommandLineArguments = struct {
     quiet: bool = false,
     verbosity: u8 = 0,
     debug_args: bool = false,
+    debug_tokens: bool = false,
+    debug_ast: bool = false,
     input_filenames: std.ArrayListUnmanaged([]const u8) = .{},
     output_filenames: std.ArrayListUnmanaged([]const u8) = .{},
     errors: std.ArrayListUnmanaged([]const u8) = .{},
@@ -113,6 +120,8 @@ const CommandLineArguments = struct {
         try writer.print("  quiet: {}\n", .{self.quiet});
         try writer.print("  verbosity: {}\n", .{self.verbosity});
         try writer.print("  Dargs: {}\n", .{self.debug_args});
+        try writer.print("  Dtokens: {}\n", .{self.debug_tokens});
+        try writer.print("  Dast: {}\n", .{self.debug_ast});
         for (0.., self.input_filenames.items) |i, item| {
             try writer.print("  input_filenames[{}]: '{'}'\n", .{
                 i,
@@ -155,6 +164,10 @@ pub fn parse_command_line(allocator: std.mem.Allocator) !CommandLineArguments {
             cla.verbosity = 2;
         } else if (std.mem.eql(u8, arg, "-Dargs")) {
             cla.debug_args = true;
+        } else if (std.mem.eql(u8, arg, "-Dtokens")) {
+            cla.debug_tokens = true;
+        } else if (std.mem.eql(u8, arg, "-Dast")) {
+            cla.debug_ast = true;
         } else if (arg[0] == '-') {
             const msg = try std.fmt.allocPrint(allocator, "Unknown '{'}'", .{
                 std.zig.fmtEscapes(arg),

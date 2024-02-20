@@ -14,7 +14,12 @@ pub const ValueType = enum(u8) {
     integer,
     number,
     string,
+    function,
 };
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+const nil = Value{ .nil = {} };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,11 +29,58 @@ pub const Value = union(ValueType) {
     integer: i64,
     number: f64,
     string: String,
+    function: Function,
 
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn add(lhs: Value, rhs: Value) Value {
-        return Value{ .integer = lhs.integer + rhs.integer };
+        if (lhs == .integer and rhs == .integer) {
+            return Value{ .integer = lhs.integer + rhs.integer };
+        } else {
+            return nil;
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn sub(lhs: Value, rhs: Value) Value {
+        if (lhs == .integer and rhs == .integer) {
+            return Value{ .integer = lhs.integer - rhs.integer };
+        } else {
+            return nil;
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn mul(lhs: Value, rhs: Value) Value {
+        if (lhs == .integer and rhs == .integer) {
+            return Value{ .integer = lhs.integer * rhs.integer };
+        } else {
+            return nil;
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn div(lhs: Value, rhs: Value) Value {
+        if (lhs == .integer and rhs == .integer) {
+            return Value{
+                .number = @as(f64, @floatFromInt(lhs.integer)) / @as(f64, @floatFromInt(rhs.integer)),
+            };
+        } else {
+            return nil;
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn mod(lhs: Value, rhs: Value) Value {
+        if (lhs == .integer and rhs == .integer) {
+            return Value{ .number = lhs.integer % rhs.integer };
+        } else {
+            return nil;
+        }
     }
 };
 
@@ -45,19 +97,63 @@ pub const String = packed struct {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
+pub const Function = struct {
+    name: []const u8,
+    code: std.ArrayListUnmanaged(Instruction) = .{},
+    data: std.ArrayListUnmanaged(u8) = .{},
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+pub const Opcode = enum(u8) {
+    nop,
+    call,
+    const_integer,
+    const_number,
+    true,
+    false,
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+pub const Instruction = packed union {
+    opcode: Opcode,
+    _padding0: u24,
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+
 pub const YAPL = struct {
     allocator: std.mem.Allocator,
 
     stack: std.ArrayListUnmanaged(Value) = .{},
     top_of_stack: usize = 0,
 
+    debug_tokens: bool = false,
+    debug_ast: bool = false,
+
     interned_strings: std.ArrayListUnmanaged(u8) = .{},
 
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn init(allocator: std.mem.Allocator) !YAPL {
+    pub const Options = struct {
+        debug_tokens: bool = false,
+        debug_ast: bool = false,
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn init(allocator: std.mem.Allocator, options: Options) !YAPL {
         return .{
             .allocator = allocator,
+            .debug_tokens = options.debug_tokens,
+            .debug_ast = options.debug_ast,
         };
     }
 
@@ -71,8 +167,7 @@ pub const YAPL = struct {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn push_nil(self: *YAPL) !void {
-        const val = Value{ .nil = {} };
-        try self.stack.append(self.allocator, val);
+        try self.stack.append(self.allocator, nil);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -282,91 +377,90 @@ pub const YAPL = struct {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     const Kind = enum {
-        none,
-        file,
-        unknown,
-        at_identifier,
-        identifier,
-        open_paren,
-        close_paren,
-        open_square,
-        close_square,
-        open_block,
-        close_block,
-        comma,
-        colon,
-        semicolon,
-        dot,
-        boolean_true,
-        boolean_false,
-        integer_literal,
-        number_literal,
-        string_literal,
-        invalid_literal,
         add,
-        sub,
-        mul,
-        div,
-        mod,
-        bang,
-        keyword_and,
-        keyword_or,
-        keyword_not,
-        keyword_if,
-        keyword_elif,
-        keyword_else,
-        keyword_while,
-        keyword_break,
-        keyword_continue,
-        keyword_return,
-        keyword_const,
-        keyword_var,
-        at_import,
-        eq,
-        neq,
-        lte,
-        gte,
-        lt,
-        gt,
-        lsh,
-        rsh,
-        lsh_assign,
-        rsh_assign,
-        assign,
         add_assign,
-        sub_assign,
-        mul_assign,
-        div_assign,
-        mod_assign,
+        assign,
+        at_identifier,
+        bang,
         binop_add,
-        binop_sub,
-        binop_mul,
+        binop_deref,
         binop_div,
-        binop_mod,
-        binop_lsh,
-        binop_rsh,
-        binop_lte,
-        binop_lt,
-        binop_gte,
-        binop_gt,
         binop_eq,
-        binop_neq,
+        binop_gt,
+        binop_gte,
+        binop_index,
         binop_logical_and,
         binop_logical_or,
-        binop_index,
-        binop_deref,
-        unary_neg,
-        unary_pos,
-        unary_logical_not,
+        binop_lsh,
+        binop_lt,
+        binop_lte,
+        binop_mod,
+        binop_mul,
+        binop_neq,
+        binop_rsh,
+        binop_sub,
+        block,
+        boolean_false,
+        boolean_true,
+        break_statement,
         call,
-        if_statement,
+        close_block,
+        close_paren,
+        close_square,
+        colon,
+        comma,
+        continue_statement,
+        div,
+        div_assign,
+        dot,
+        eq,
+        file,
+        gt,
+        gte,
+        identifier,
         if_condition,
         if_else,
-        while_statement,
-        break_statement,
-        continue_statement,
+        if_statement,
+        integer_literal,
+        invalid_literal,
+        keyword_and,
+        keyword_break,
+        keyword_const,
+        keyword_continue,
+        keyword_elif,
+        keyword_else,
+        keyword_if,
+        keyword_not,
+        keyword_or,
+        keyword_return,
+        keyword_var,
+        keyword_while,
+        lsh,
+        lsh_assign,
+        lt,
+        lte,
+        mod,
+        mod_assign,
+        mul,
+        mul_assign,
+        neq,
+        none,
+        number_literal,
+        open_block,
+        open_paren,
+        open_square,
         return_statement,
-        block,
+        rsh,
+        rsh_assign,
+        semicolon,
+        string_literal,
+        sub,
+        sub_assign,
+        unary_logical_not,
+        unary_neg,
+        unary_pos,
+        unknown,
+        while_statement,
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -472,31 +566,21 @@ pub const YAPL = struct {
                                 index += 1;
                                 if (index < str.len - 2) {
                                     const n0 = str[index];
-                                    const n1 = str[index+1];
+                                    const n1 = str[index + 1];
                                     index += 2;
-                                    var codepoint : u8 = 0;
-                                    if (n0 >= '0' and n0 <= '9')
-                                    {
+                                    var codepoint: u8 = 0;
+                                    if (n0 >= '0' and n0 <= '9') {
                                         codepoint |= (n0 - '0') << 4;
-                                    }
-                                    else if (n0 >= 'a' and n0 <= 'f')
-                                    {
+                                    } else if (n0 >= 'a' and n0 <= 'f') {
                                         codepoint |= (n0 - 'a' + 10) << 4;
-                                    }
-                                    else if (n0 >= 'A' and n0 <= 'F')
-                                    {
+                                    } else if (n0 >= 'A' and n0 <= 'F') {
                                         codepoint |= (n0 - 'A' + 10) << 4;
                                     }
-                                    if (n1 >= '0' and n1 <= '9')
-                                    {
+                                    if (n1 >= '0' and n1 <= '9') {
                                         codepoint |= n1 - '0';
-                                    }
-                                    else if (n1 >= 'a' and n1 <= 'f')
-                                    {
+                                    } else if (n1 >= 'a' and n1 <= 'f') {
                                         codepoint |= n1 - 'a' + 10;
-                                    }
-                                    else if (n1 >= 'A' and n1 <= 'F')
-                                    {
+                                    } else if (n1 >= 'A' and n1 <= 'F') {
                                         codepoint |= n1 - 'A' + 10;
                                     }
                                     try buf.append(codepoint);
@@ -506,26 +590,20 @@ pub const YAPL = struct {
                                 index += 1;
                                 if (index < str.len - 4) {
                                     var codepoint: u16 = 0;
-                                    for (0..4) |_|
-                                    {
+                                    for (0..4) |_| {
                                         const n = str[index];
                                         index += 1;
                                         codepoint <<= 4;
-                                        if (n >= '0' and n <= '9')
-                                        {
+                                        if (n >= '0' and n <= '9') {
                                             codepoint |= (n - '0');
-                                        }
-                                        else if (n >= 'a' and n <= 'f')
-                                        {
+                                        } else if (n >= 'a' and n <= 'f') {
                                             codepoint |= (n - 'a' + 10) << 4;
-                                        }
-                                        else if (n >= 'A' and n <= 'F')
-                                        {
+                                        } else if (n >= 'A' and n <= 'F') {
                                             codepoint |= (n - 'A' + 10) << 4;
                                         }
                                     }
                                     var temp: [4]u8 = undefined;
-                                    const len = try std.unicode.utf8Encode (codepoint, &temp);
+                                    const len = try std.unicode.utf8Encode(codepoint, &temp);
                                     try buf.appendSlice(temp[0..len]);
                                 }
                             },
@@ -936,10 +1014,6 @@ pub const YAPL = struct {
                 } else if (std.mem.eql(u8, "const", keyword)) {
                     kind = .keyword_const;
                 }
-            } else if (kind == .at_identifier) {
-                if (std.mem.eql(u8, "@import", keyword)) {
-                    kind = .at_import;
-                }
             } else if (kind == .string_literal) {
                 word = self.parse_string_literal(word) catch blk: {
                     kind = .invalid_literal;
@@ -1005,6 +1079,14 @@ pub const YAPL = struct {
     pub fn compile(self: *YAPL, source: String, label: String) !void {
         var token_iter = self.tokenize(source, label);
 
+        if (self.debug_tokens) {
+            while (token_iter.next()) |tk| {
+                std.debug.print("{}\n", .{tk});
+            }
+
+            token_iter.reset();
+        }
+
         var ast = Ast.init(self);
         defer ast.deinit();
 
@@ -1019,7 +1101,9 @@ pub const YAPL = struct {
             });
         }
 
-        ast.dump(file);
+        if (self.debug_ast) {
+            ast.dump(file);
+        }
 
         if (ast.errors.items.len > 0) {
             std.debug.print("{s}\n", .{ast.errors.items});
@@ -1223,6 +1307,9 @@ pub const YAPL = struct {
                         return self.append(.string_literal, tk.string);
                     },
                     .identifier => {
+                        return self.parse_prefix(iter, tk.string);
+                    },
+                    .at_identifier => {
                         return self.parse_prefix(iter, tk.string);
                     },
                     .open_paren => {
@@ -1595,7 +1682,7 @@ pub const YAPL = struct {
                         const blk = self.parse_block(iter);
                         return blk;
                     },
-                    .identifier => {
+                    .identifier, .at_identifier => {
                         const lhs = try self.parse_expression(iter);
                         if (iter.peek()) |atk| {
                             switch (atk.kind) {
@@ -1709,7 +1796,23 @@ pub const YAPL = struct {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn dump_stack(self: *YAPL, label: []const u8) !void {
-        std.debug.print("YAPL {s}\n", .{label});
+
+        if (true) {
+            const addr = @returnAddress ();
+            const debug_info = try std.debug.getSelfDebugInfo();
+            const module = try debug_info.getModuleForAddress(addr);
+            const symbol = try module.getSymbolAtAddress(self.allocator, addr);
+            defer symbol.deinit(self.allocator);
+            std.debug.print("YAPL stack: '{'}' {s}\n", .{
+                std.zig.fmtEscapes(label),
+                symbol.symbol_name,
+            });
+        }
+        else
+        {
+            std.debug.print("YAPL stack: '{'}'\n", .{std.zig.fmtEscapes(label)});
+        }
+
         for (self.top_of_stack..self.stack.items.len) |i| {
             const value = self.stack.items[i];
             switch (value) {
@@ -1727,7 +1830,13 @@ pub const YAPL = struct {
                 },
                 .string => |val| {
                     const slice = try self.string(val);
-                    std.debug.print("  {}: '{'}' : string\n", .{ i - self.top_of_stack, std.zig.fmtEscapes(slice) });
+                    std.debug.print("  {}: '{'}' : string\n", .{
+                        i - self.top_of_stack,
+                        std.zig.fmtEscapes(slice),
+                    });
+                },
+                .function => {
+                    std.debug.print("  {}: function\n", .{i - self.top_of_stack});
                 },
             }
         }
